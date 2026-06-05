@@ -1,0 +1,238 @@
+# Proyecto  : Sistema de Gestión de Cobros QR — BCP
+# Iteración : Fase 3 — Construcción, Iteración 1
+# Autor     : [Tesista]
+# Fecha     : 2026
+version: '3.9'
+
+networks:
+  qrpayments-network:
+    driver: bridge
+
+volumes:
+  sqlserver-data:
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: qrpayments-sqlserver
+    environment:
+      SA_PASSWORD: "${SA_PASSWORD:-YourStrong!Passw0rd}"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${SA_PASSWORD:-YourStrong!Passw0rd}", "-Q", "SELECT 1", "-No"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  mock-auth:
+    build:
+      context: ..
+      dockerfile: src/Mocks/MockBCP.AuthService/Dockerfile
+    container_name: mock-auth
+    ports:
+      - "5010:8080"
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  mock-qr:
+    build:
+      context: ..
+      dockerfile: src/Mocks/MockBCP.QRService/Dockerfile
+    container_name: mock-qr
+    ports:
+      - "5011:8080"
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  mock-payment:
+    build:
+      context: ..
+      dockerfile: src/Mocks/MockBCP.PaymentService/Dockerfile
+    container_name: mock-payment
+    ports:
+      - "5012:8080"
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  company-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.CompanyService/Dockerfile
+    container_name: company-service
+    ports:
+      - "5002:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Companies;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mock-auth:
+        condition: service_started
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.UserService/Dockerfile
+    container_name: user-service
+    ports:
+      - "5003:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Users;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mock-auth:
+        condition: service_started
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.NotificationService/Dockerfile
+    container_name: notification-service
+    ports:
+      - "5004:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Notifications;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  report-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.ReportService/Dockerfile
+    container_name: report-service
+    ports:
+      - "5005:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Reports;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  audit-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.AuditService/Dockerfile
+    container_name: audit-service
+    ports:
+      - "5006:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Audit;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: src/Gateway/QRPayments.Gateway/Dockerfile
+    container_name: qrpayments-gateway
+    ports:
+      - "5000:8080"
+    environment:
+      - Auth__Authority=http://mock-auth:8080
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      - company-service
+      - user-service
+      - notification-service
+      - report-service
+      - audit-service
+      - mock-auth
+      - mock-qr
+      - mock-payment
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web:
+    build:
+      context: ..
+      dockerfile: src/Web/QRPayments.Web/Dockerfile
+    container_name: qrpayments-web
+    ports:
+      - "5001:8080"
+    environment:
+      - GatewayUrl=http://gateway:8080
+    depends_on:
+      - gateway
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
