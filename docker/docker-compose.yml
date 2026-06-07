@@ -86,7 +86,7 @@ services:
       - "5002:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Companies;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
     depends_on:
       sqlserver:
@@ -110,7 +110,7 @@ services:
       - "5003:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Users;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
     depends_on:
       sqlserver:
@@ -134,7 +134,7 @@ services:
       - "5004:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Notifications;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
     depends_on:
       sqlserver:
@@ -156,8 +156,9 @@ services:
       - "5005:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Reports;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
+      - Services__TransactionServiceUrl=http://transaction-service:8080
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -178,11 +179,62 @@ services:
       - "5006:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Audit;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
     depends_on:
       sqlserver:
         condition: service_healthy
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qr-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.QRService/Dockerfile
+    container_name: qr-service
+    ports:
+      - "5007:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_QRCodes;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
+      - Auth__Issuer=MockBCP.AuthService
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mock-auth:
+        condition: service_started
+    networks:
+      - qrpayments-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  transaction-service:
+    build:
+      context: ..
+      dockerfile: src/Services/QRPayments.TransactionService/Dockerfile
+    container_name: transaction-service
+    ports:
+      - "5008:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=QRPayments_Transactions;User Id=sa;Password=${SA_PASSWORD:-YourStrong!Passw0rd};TrustServerCertificate=true
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
+      - Auth__Issuer=MockBCP.AuthService
+      - BCP__PaymentServiceUrl=http://mock-payment:8080
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      mock-auth:
+        condition: service_started
+      mock-payment:
+        condition: service_started
     networks:
       - qrpayments-network
     healthcheck:
@@ -199,7 +251,7 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - Auth__Authority=http://mock-auth:8080
+      - Auth__SecretKey=MockBCPSuperSecretKey2026ForDevelopmentOnly!
       - Auth__Issuer=MockBCP.AuthService
     depends_on:
       - company-service
@@ -207,6 +259,8 @@ services:
       - notification-service
       - report-service
       - audit-service
+      - qr-service
+      - transaction-service
       - mock-auth
       - mock-qr
       - mock-payment

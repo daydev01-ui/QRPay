@@ -1,0 +1,149 @@
+@page "/transactions"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpFactory
+@using System.Text.Json
+
+<PageTitle>Transacciones — QRPayments BCP</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">Transacciones</h1>
+    <button class="btn btn-primary" @onclick="() => _showValidate = true">+ Validar pago QR</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert alert-@_messageType">@_message</div>
+}
+
+@if (_showValidate)
+{
+    <div class="card mb-4">
+        <div class="card-header">Validar pago QR</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">QR Code ID</label>
+                    <input class="form-control" @bind="_valForm.QRCodeId" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Company ID</label>
+                    <input class="form-control" @bind="_valForm.CompanyId" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Monto</label>
+                    <input type="number" class="form-control" @bind="_valForm.Amount" step="0.01" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Moneda</label>
+                    <input class="form-control" @bind="_valForm.Currency" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Idempotency Key</label>
+                    <input class="form-control" @bind="_valForm.IdempotencyKey" />
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-success me-2" @onclick="ValidatePayment">Procesar</button>
+                <button class="btn btn-secondary" @onclick="() => _showValidate = false">Cancelar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="mb-3 d-flex gap-2">
+    <input class="form-control w-auto" placeholder="Company ID" @bind="_filterCompanyId" />
+    <select class="form-select w-auto" @bind="_filterStatus">
+        <option value="">-- Estado --</option>
+        <option>Pending</option>
+        <option>Completed</option>
+        <option>Failed</option>
+        <option>Duplicate</option>
+    </select>
+    <button class="btn btn-outline-secondary" @onclick="LoadTransactions">Buscar</button>
+</div>
+
+@if (_loading)
+{
+    <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead class="table-dark">
+                <tr><th>ID</th><th>Monto</th><th>Moneda</th><th>Estado</th><th>Referencia BCP</th><th>Creado</th><th>Completado</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var t in _transactions)
+                {
+                    <tr>
+                        <td><small>@t.Id.ToString()[..8]...</small></td>
+                        <td>@t.Amount</td>
+                        <td>@t.Currency</td>
+                        <td>
+                            <span class="badge @(t.Status == "Completed" ? "bg-success" : t.Status == "Failed" ? "bg-danger" : t.Status == "Duplicate" ? "bg-warning" : "bg-secondary")">@t.Status</span>
+                        </td>
+                        <td>@(t.Payment?.BCPReference ?? "-")</td>
+                        <td>@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@(t.CompletedAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<TxItem> _transactions = new();
+    private bool _loading = false;
+    private bool _showValidate = false;
+    private string _message = "";
+    private string _messageType = "info";
+    private string _filterCompanyId = "";
+    private string _filterStatus = "";
+    private ValForm _valForm = new() { IdempotencyKey = Guid.NewGuid().ToString() };
+
+    private async Task LoadTransactions()
+    {
+        if (string.IsNullOrWhiteSpace(_filterCompanyId)) return;
+        _loading = true;
+        try
+        {
+            var url = $"/api/transactions?companyId={_filterCompanyId}";
+            if (!string.IsNullOrEmpty(_filterStatus)) url += $"&status={_filterStatus}";
+            var client = HttpFactory.CreateClient("Gateway");
+            var resp = await client.GetAsync(url);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                _transactions = JsonSerializer.Deserialize<List<TxItem>>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private async Task ValidatePayment()
+    {
+        var client = HttpFactory.CreateClient("Gateway");
+        var resp = await client.PostAsJsonAsync("/api/transactions/validate", _valForm);
+        if (resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            var tx = JsonSerializer.Deserialize<TxItem>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            _message = $"Transacción procesada: {tx?.Status}. ID: {tx?.Id}";
+            _messageType = tx?.Status == "Completed" ? "success" : "warning";
+            _showValidate = false;
+            _valForm = new() { IdempotencyKey = Guid.NewGuid().ToString() };
+        }
+        else
+        {
+            _message = "Error al procesar el pago.";
+            _messageType = "danger";
+        }
+    }
+
+    private class ValForm { public string QRCodeId { get; set; } = ""; public string CompanyId { get; set; } = ""; public decimal Amount { get; set; } = 100; public string Currency { get; set; } = "BOB"; public string IdempotencyKey { get; set; } = ""; }
+    private class PaymentInfo { public string BCPReference { get; set; } = ""; }
+    private class TxItem { public Guid Id { get; set; } public decimal Amount { get; set; } public string Currency { get; set; } = ""; public string Status { get; set; } = ""; public DateTime CreatedAt { get; set; } public DateTime? CompletedAt { get; set; } public PaymentInfo? Payment { get; set; } }
+}

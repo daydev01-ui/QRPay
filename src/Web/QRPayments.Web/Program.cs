@@ -1,5 +1,5 @@
 // Proyecto  : Sistema de Gestión de Cobros QR — BCP
-// Servicio  : QRPayments.Web (Razor Pages)
+// Servicio  : QRPayments.Web (Blazor Server)
 // Iteración : Fase 3 — Construcción, Iteración 1
 // Trazab.   : [R-00] → [CU-00] → [WebProgram] → [IntegrationTests]
 // Autor     : [Tesista]
@@ -13,7 +13,11 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 builder.Host.UseSerilog();
-builder.Services.AddRazorPages();
+
+// Blazor Server
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+
 builder.Services.AddHttpClient("Gateway", c =>
 {
     c.BaseAddress = new Uri(builder.Configuration["GatewayUrl"] ?? "http://localhost:5000");
@@ -22,23 +26,28 @@ builder.Services.AddHttpClient("Gateway", c =>
 builder.Services.AddAuthentication("Cookies")
     .AddCookie("Cookies", options =>
     {
-        options.LoginPath = "/Account/Login";
-        options.LogoutPath = "/Account/Logout";
+        options.LoginPath = "/login";
+        options.LogoutPath = "/logout";
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
+{
     app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
 
 app.UseStaticFiles();
-app.UseRouting();
+app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapRazorPages();
+app.MapRazorComponents<QRPayments.Web.Components.App>()
+    .AddInteractiveServerRenderMode();
 app.MapHealthChecks("/health");
 
 app.Run();

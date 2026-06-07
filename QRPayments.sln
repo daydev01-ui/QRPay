@@ -38,6 +38,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QRPayments.UserService.Test
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QRPayments.Integration.Tests", "tests\QRPayments.Integration.Tests\QRPayments.Integration.Tests.csproj", "{A100000F-0000-0000-0000-00000000000F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QRPayments.QRService", "src\Services\QRPayments.QRService\QRPayments.QRService.csproj", "{A1000010-0000-0000-0000-000000000010}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QRPayments.TransactionService", "src\Services\QRPayments.TransactionService\QRPayments.TransactionService.csproj", "{A1000011-0000-0000-0000-000000000011}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -104,5 +108,13 @@ Global
 		{A100000F-0000-0000-0000-00000000000F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A100000F-0000-0000-0000-00000000000F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A100000F-0000-0000-0000-00000000000F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1000010-0000-0000-0000-000000000010}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1000010-0000-0000-0000-000000000010}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1000010-0000-0000-0000-000000000010}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1000010-0000-0000-0000-000000000010}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1000011-0000-0000-0000-000000000011}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1000011-0000-0000-0000-000000000011}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1000011-0000-0000-0000-000000000011}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1000011-0000-0000-0000-000000000011}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

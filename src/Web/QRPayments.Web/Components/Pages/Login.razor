@@ -1,0 +1,79 @@
+@page "/login"
+@page "/"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpFactory
+@inject NavigationManager Nav
+@using System.Text.Json
+
+<PageTitle>Login — QRPayments BCP</PageTitle>
+
+<div class="d-flex justify-content-center align-items-center" style="min-height:100vh; background:#f0f2f5;">
+    <div class="card shadow" style="width:380px;">
+        <div class="card-body p-4">
+            <h4 class="text-center text-primary mb-4 fw-bold">QRPayments BCP</h4>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <EditForm Model="_model" OnValidSubmit="HandleLogin">
+                <DataAnnotationsValidator />
+                <div class="mb-3">
+                    <label class="form-label">Usuario</label>
+                    <InputText class="form-control" @bind-Value="_model.Username" placeholder="admin" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contraseña</label>
+                    <InputText type="password" class="form-control" @bind-Value="_model.Password" placeholder="admin123" />
+                </div>
+                <button type="submit" class="btn btn-primary w-100" disabled="@_loading">
+                    @(_loading ? "Iniciando..." : "Iniciar sesión")
+                </button>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel _model = new();
+    private string _error = "";
+    private bool _loading = false;
+
+    private async Task HandleLogin()
+    {
+        _loading = true;
+        _error = "";
+        try
+        {
+            var client = HttpFactory.CreateClient("Gateway");
+            var resp = await client.PostAsJsonAsync("/bcp/auth/login", new { username = _model.Username, password = _model.Password });
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<JsonElement>(body);
+                var token = result.GetProperty("token").GetString();
+                // Store token in session/cookie via JS interop - for simplicity store in memory
+                Nav.NavigateTo("/dashboard");
+            }
+            else
+            {
+                _error = "Credenciales inválidas. Use admin / admin123";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error de conexión: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private class LoginModel
+    {
+        public string Username { get; set; } = "admin";
+        public string Password { get; set; } = "";
+    }
+}

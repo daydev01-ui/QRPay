@@ -1,0 +1,138 @@
+@page "/reports"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpFactory
+@using System.Text.Json
+
+<PageTitle>Reportes — QRPayments BCP</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3">Reportes</h1>
+    <button class="btn btn-primary" @onclick="() => _showGenerate = true">+ Generar reporte</button>
+</div>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert alert-@_messageType">@_message</div>
+}
+
+@if (_showGenerate)
+{
+    <div class="card mb-4">
+        <div class="card-header">Generar reporte</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" @bind="_genForm.Type">
+                        <option value="0">Daily</option>
+                        <option value="1">Monthly</option>
+                        <option value="2">Custom</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fecha inicio</label>
+                    <input type="date" class="form-control" @bind="_genForm.StartDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fecha fin</label>
+                    <input type="date" class="form-control" @bind="_genForm.EndDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Company ID (opcional)</label>
+                    <input class="form-control" @bind="_genForm.CompanyId" />
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-success me-2" @onclick="GenerateReport">Generar</button>
+                <button class="btn btn-secondary" @onclick="() => _showGenerate = false">Cancelar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead class="table-dark">
+                <tr><th>ID</th><th>Tipo</th><th>Período</th><th>Generado por</th><th>Generado</th><th>Exportar</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _reports)
+                {
+                    <tr>
+                        <td><small>@r.Id.ToString()[..8]...</small></td>
+                        <td>@r.Type</td>
+                        <td>@r.StartDate.ToString("yyyy-MM-dd") → @r.EndDate.ToString("yyyy-MM-dd")</td>
+                        <td>@r.GeneratedBy</td>
+                        <td>@r.GeneratedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <a href="/api/reports/@r.Id/export?format=excel" target="_blank" class="btn btn-sm btn-outline-success me-1">CSV</a>
+                            <a href="/api/reports/@r.Id/export?format=pdf" target="_blank" class="btn btn-sm btn-outline-danger">PDF</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<ReportItem> _reports = new();
+    private bool _loading = true;
+    private bool _showGenerate = false;
+    private string _message = "";
+    private string _messageType = "info";
+    private GenForm _genForm = new();
+
+    protected override async Task OnInitializedAsync() => await LoadReports();
+
+    private async Task LoadReports()
+    {
+        _loading = true;
+        try
+        {
+            var client = HttpFactory.CreateClient("Gateway");
+            var resp = await client.GetAsync("/api/reports");
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                _reports = JsonSerializer.Deserialize<List<ReportItem>>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private async Task GenerateReport()
+    {
+        var client = HttpFactory.CreateClient("Gateway");
+        var payload = new
+        {
+            type = _genForm.Type,
+            startDate = _genForm.StartDate,
+            endDate = _genForm.EndDate,
+            companyId = string.IsNullOrWhiteSpace(_genForm.CompanyId) ? (Guid?)null : Guid.Parse(_genForm.CompanyId)
+        };
+        var resp = await client.PostAsJsonAsync("/api/reports/generate", payload);
+        if (resp.IsSuccessStatusCode)
+        {
+            _message = "Reporte generado correctamente.";
+            _messageType = "success";
+            _showGenerate = false;
+            await LoadReports();
+        }
+        else
+        {
+            _message = "Error al generar el reporte.";
+            _messageType = "danger";
+        }
+    }
+
+    private class GenForm { public int Type { get; set; } = 0; public DateTime StartDate { get; set; } = DateTime.Today; public DateTime EndDate { get; set; } = DateTime.Today; public string CompanyId { get; set; } = ""; }
+    private class ReportItem { public Guid Id { get; set; } public string Type { get; set; } = ""; public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public DateTime GeneratedAt { get; set; } public string GeneratedBy { get; set; } = ""; }
+}

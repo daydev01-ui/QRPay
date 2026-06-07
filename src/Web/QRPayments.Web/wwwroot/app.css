@@ -1,0 +1,21 @@
+/* Proyecto: QRPayments BCP — Blazor Server UI */
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #f0f2f5;
+}
+
+.nav-link:hover {
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+}
+
+.card {
+    border-radius: 8px;
+}
+
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}

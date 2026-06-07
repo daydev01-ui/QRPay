@@ -3,7 +3,10 @@
 // Iteración : Fase 3 — Construcción, Iteración 1
 // Autor     : [Tesista]
 // Fecha     : 2026
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using QRPayments.ReportService.Infrastructure.Data;
 using Serilog;
 
@@ -22,34 +25,66 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "QRPayments - ReportService", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header
+    });
+    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddAuthentication("Bearer")
-    .AddJwtBearer("Bearer", options =>
+var jwtKey = builder.Configuration["Auth:SecretKey"] ?? "MockBCPSuperSecretKey2026ForDevelopmentOnly!";
+var jwtIssuer = builder.Configuration["Auth:Issuer"] ?? "MockBCP.AuthService";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Auth:Authority"];
         options.RequireHttpsMetadata = false;
-        options.TokenValidationParameters = new()
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            ValidateAudience = false,
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Auth:Issuer"],
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
         };
     });
 
 builder.Services.AddAuthorization();
+
+var txBaseUrl = builder.Configuration["Services:TransactionServiceUrl"] ?? "http://transaction-service:8080";
+builder.Services.AddHttpClient("TransactionService", c =>
+{
+    c.BaseAddress = new Uri(txBaseUrl);
+});
+
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseSerilogRequestLogging();
 app.UseAuthentication();
